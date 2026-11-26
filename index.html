@@ -1125,9 +1125,24 @@
         let photoObjectUrls = [];
         let encryptedPhotoRecords = [];
         let encryptedPageSettings = null;
-        const encryptedGalleryReady = loadEncryptedGallery().catch(err => {
-            console.warn('加密照片加载失败：', err);
-            return [];
+        const encryptedGalleryReady = new Promise(resolve => {
+            const startEncryptedGallery = () => {
+                loadEncryptedGallery()
+                    .then(resolve)
+                    .catch(err => {
+                        console.warn('加密照片加载失败：', err);
+                        resolve([]);
+                    });
+            };
+            if(document.readyState === 'loading') {
+                document.addEventListener(
+                    'DOMContentLoaded',
+                    startEncryptedGallery,
+                    { once: true }
+                );
+            } else {
+                startEncryptedGallery();
+            }
         });
         const photoGalleryReady = Promise.all([loadPersistedPhotos(), encryptedGalleryReady])
             .then(async () => {

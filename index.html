@@ -1125,6 +1125,16 @@
         let photoObjectUrls = [];
         let encryptedPhotoRecords = [];
         let encryptedPageSettings = null;
+        let encryptedSettingsSettled = false;
+        let resolveEncryptedPageSettings;
+        const encryptedPageSettingsReady = new Promise(resolve => {
+            resolveEncryptedPageSettings = resolve;
+        });
+        function finishEncryptedSettings(settings) {
+            if(encryptedSettingsSettled) return;
+            encryptedSettingsSettled = true;
+            resolveEncryptedPageSettings(settings);
+        }
         const encryptedGalleryReady = new Promise(resolve => {
             let settled = false;
             let started = false;
@@ -2580,14 +2590,17 @@
             const encryptedStatus = document.getElementById('encrypted-photo-status');
             if(!keyText) {
                 if(encryptedStatus) encryptedStatus.textContent = '加密相册：未启用';
+                finishEncryptedSettings(null);
                 return [];
             }
             if(!cryptoJs) {
                 if(encryptedStatus) encryptedStatus.textContent = '加密相册：解密组件未加载';
+                finishEncryptedSettings(null);
                 return [];
             }
             if(keyText.length !== 64) {
                 if(encryptedStatus) encryptedStatus.textContent = '加密相册：密钥格式错误';
+                finishEncryptedSettings(null);
                 return [];
             }
             if(encryptedStatus) encryptedStatus.textContent = '加密相册：正在解密...';
@@ -2595,6 +2608,7 @@
                 const manifestResponse = await fetch('gallery/manifest.json', { cache: 'no-store' });
                 if(!manifestResponse.ok) {
                     if(encryptedStatus) encryptedStatus.textContent = '加密相册：加密数据未发布';
+                    finishEncryptedSettings(null);
                     return [];
                 }
                 const manifest = await manifestResponse.json();
@@ -2619,34 +2633,46 @@
                         console.warn('加密页面设置解密失败');
                     }
                 }
-                const records = [];
-                for(const item of manifest.photos || []) {
-                    try {
-                        const response = await fetch(item.file, { cache: 'no-store' });
-                        if(!response.ok) continue;
-                        const decrypted = decryptGalleryPayload(
-                            await response.arrayBuffer(),
-                            item.iv,
-                            keyWords
-                        );
-                        const type = item.type || 'image/jpeg';
-                        records.push({
-                            name: item.name || `encrypted-photo-${records.length + 1}`,
-                            type,
-                            blob: new Blob([decrypted], { type }),
-                            createdAt: item.createdAt || Date.now()
-                        });
-                    } catch(err) {
-                        console.warn('单张加密照片解密失败');
+                finishEncryptedSettings(encryptedPageSettings);
+                const photoItems = manifest.photos || [];
+                const records = new Array(photoItems.length);
+                let nextPhotoIndex = 0;
+                const loadNextPhoto = async () => {
+                    while(nextPhotoIndex < photoItems.length) {
+                        const index = nextPhotoIndex++;
+                        const item = photoItems[index];
+                        try {
+                            const response = await fetch(item.file, { cache: 'no-store' });
+                            if(!response.ok) continue;
+                            const decrypted = decryptGalleryPayload(
+                                await response.arrayBuffer(),
+                                item.iv,
+                                keyWords
+                            );
+                            const type = item.type || 'image/jpeg';
+                            records[index] = {
+                                name: item.name || `encrypted-photo-${index + 1}`,
+                                type,
+                                blob: new Blob([decrypted], { type }),
+                                createdAt: item.createdAt || Date.now()
+                            };
+                        } catch(err) {
+                            console.warn('单张加密照片解密失败');
+                        }
                     }
-                }
-                encryptedPhotoRecords = records;
+                };
+                const workerCount = Math.min(4, photoItems.length);
+                await Promise.all(
+                    Array.from({ length: workerCount }, () => loadNextPhoto())
+                );
+                encryptedPhotoRecords = records.filter(Boolean);
                 if(encryptedStatus) {
-                    encryptedStatus.textContent = `加密相册：已解密 ${records.length} 张照片`;
+                    encryptedStatus.textContent = `加密相册：已解密 ${encryptedPhotoRecords.length} 张照片`;
                 }
-                return records;
+                return encryptedPhotoRecords;
             } catch(err) {
                 console.warn('加密相册不可用');
+                finishEncryptedSettings(null);
                 if(encryptedStatus) encryptedStatus.textContent = '加密相册：解密失败';
                 return [];
             }
@@ -3028,9 +3054,9 @@
 
         const bootSettings = loadSettings();
         if(bootSettings) applySettings(bootSettings, { rebuildScene: false });
-        encryptedGalleryReady.then(() => {
-            if(encryptedPageSettings) {
-                applySettings(encryptedPageSettings, { rebuildScene: false });
+        encryptedPageSettingsReady.then(settings => {
+            if(settings) {
+                applySettings(settings, { rebuildScene: false });
             }
         });
     </script>

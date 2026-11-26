@@ -76,5 +76,6 @@
       "type": "image/jpeg",
       "iv": "f8b24767ebea185f19cee8444a904ba2"
     }
-  ]
+  ],
+  "photoBundle": "gallery/photos.bundle"
 }

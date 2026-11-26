@@ -1002,7 +1002,7 @@
                 <label>背景音乐</label>
                 <button class="btn" onclick="document.getElementById('music-input').click()">📁 上传 MP3</button>
                 <input type="file" id="music-input" accept="audio/*" style="display:none;">
-                <div id="music-status" style="margin-top:7px;font-size:11px;color:#a18e93;">当前音乐：Always.mp3</div>
+                <div id="music-status" style="margin-top:7px;font-size:11px;color:#a18e93;">当前音乐：Always Online.mp3</div>
                 <div style="display:flex; gap:10px; margin-top:5px;">
                     <button id="btn-play-pause" class="btn" style="width:40px;">▶</button>
                     <input type="range" id="volume-slider" min="0" max="1" step="0.1" value="0.6">
@@ -1198,9 +1198,12 @@
         const MUSIC_DB_NAME = 'romanticBirthdayCakeMusicV1';
         const MUSIC_STORE_NAME = 'tracks';
         const MUSIC_RECORD_ID = 'background';
+        const DEFAULT_MUSIC_URL = 'music/always-80.mp3?v=1';
         let musicDBPromise = null;
         let storedMusicRecord = null;
         let musicObjectUrl = '';
+        let backgroundMusicBlobUrl = '';
+        let backgroundMusicPrefetch = null;
         const storedMusicReady = loadStoredMusic()
             .then(record => {
                 storedMusicRecord = record;
@@ -1478,7 +1481,7 @@
             if(!status) return;
             status.textContent = record?.name
                 ? `当前音乐：${record.name}`
-                : '当前音乐：Always.mp3';
+                : '当前音乐：Always Online.mp3';
         }
 
         function loadStoredMusic() {
@@ -1496,6 +1499,29 @@
             audioEl.load();
         }
 
+        function primeBackgroundMusic() {
+            if(backgroundMusicPrefetch) return backgroundMusicPrefetch;
+            backgroundMusicPrefetch = fetch(DEFAULT_MUSIC_URL, { cache: 'force-cache' })
+                .then(response => {
+                    if(!response.ok) throw new Error('背景音乐预加载失败');
+                    return response.blob();
+                })
+                .then(blob => {
+                    backgroundMusicBlobUrl = URL.createObjectURL(blob);
+                    if(
+                        audioEl &&
+                        !storedMusicRecord?.blob &&
+                        audioEl.paused &&
+                        audioEl.currentTime === 0
+                    ) {
+                        setBackgroundAudio(blob);
+                    }
+                    return blob;
+                })
+                .catch(() => null);
+            return backgroundMusicPrefetch;
+        }
+
         function initAudio() {
             audioEl = new Audio();
             audioEl.loop = true;
@@ -1506,7 +1532,8 @@
             if(storedMusicRecord?.blob) {
                 setBackgroundAudio(storedMusicRecord.blob);
             } else {
-                audioEl.src = 'music/always.mp3?v=1';
+                audioEl.src = backgroundMusicBlobUrl || DEFAULT_MUSIC_URL;
+                primeBackgroundMusic();
             }
             try {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -2626,6 +2653,81 @@
             return wordArrayToUint8Array(decrypted);
         }
 
+        function hexToUint8Array(hex) {
+            if(hex.length % 2 !== 0) throw new Error('十六进制数据格式错误');
+            const bytes = new Uint8Array(hex.length / 2);
+            for(let index = 0; index < bytes.length; index++) {
+                bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+            }
+            return bytes;
+        }
+
+        async function decryptGalleryPayloadAsync(buffer, ivHex, keyHex) {
+            const encrypted = new Uint8Array(buffer);
+            if(encrypted.length <= 32) throw new Error('加密数据不完整');
+            const ciphertext = encrypted.slice(0, -32);
+            const tag = encrypted.slice(-32);
+            const keyBytes = hexToUint8Array(keyHex);
+            const ivBytes = hexToUint8Array(ivHex);
+            const subtle = window.crypto?.subtle;
+
+            if(subtle) {
+                try {
+                    const authenticated = new Uint8Array(ivBytes.length + ciphertext.length);
+                    authenticated.set(ivBytes, 0);
+                    authenticated.set(ciphertext, ivBytes.length);
+                    const hmacKey = await subtle.importKey(
+                        'raw',
+                        keyBytes,
+                        { name: 'HMAC', hash: 'SHA-256' },
+                        false,
+                        ['verify']
+                    );
+                    const valid = await subtle.verify('HMAC', hmacKey, tag, authenticated);
+                    if(!valid) throw new Error('完整性校验失败');
+                    const aesKey = await subtle.importKey(
+                        'raw',
+                        keyBytes,
+                        { name: 'AES-CBC' },
+                        false,
+                        ['decrypt']
+                    );
+                    const plain = await subtle.decrypt(
+                        { name: 'AES-CBC', iv: ivBytes },
+                        aesKey,
+                        ciphertext
+                    );
+                    return new Uint8Array(plain);
+                } catch(err) {
+                    console.warn('快速解密失败，尝试兼容模式');
+                }
+            }
+
+            const cryptoJs = getCryptoJsLib();
+            if(!cryptoJs) throw new Error('解密组件未加载');
+            return decryptGalleryPayload(buffer, ivHex, cryptoJs.enc.Hex.parse(keyHex));
+        }
+
+        function parsePhotoBundle(buffer, expectedCount) {
+            const bytes = new Uint8Array(buffer);
+            const view = new DataView(buffer);
+            if(bytes.length < 8) throw new Error('照片包不完整');
+            const magic = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+            if(magic !== 'LSB1') throw new Error('照片包格式错误');
+            const count = view.getUint32(4);
+            if(count !== expectedCount) throw new Error('照片包数量不一致');
+            let offset = 8 + count * 4;
+            if(offset > bytes.length) throw new Error('照片包索引不完整');
+            const segments = [];
+            for(let index = 0; index < count; index++) {
+                const length = view.getUint32(8 + index * 4);
+                if(offset + length > bytes.length) throw new Error('照片包分段不完整');
+                segments.push(bytes.slice(offset, offset + length));
+                offset += length;
+            }
+            return segments;
+        }
+
         async function loadEncryptedGallery() {
             const keyText = getEncryptedGalleryKey();
             const cryptoJs = getCryptoJsLib();
@@ -2655,6 +2757,13 @@
                 }
                 const manifest = await manifestResponse.json();
                 const keyWords = cryptoJs.enc.Hex.parse(keyText);
+                const photoItems = manifest.photos || [];
+                const photoBundlePromise = manifest.photoBundle
+                    ? fetch(manifest.photoBundle, { cache: 'default' })
+                        .then(response => response.ok ? response.arrayBuffer() : null)
+                        .then(buffer => buffer ? parsePhotoBundle(buffer, photoItems.length) : null)
+                        .catch(() => null)
+                    : Promise.resolve(null);
                 if(manifest.settings?.file && manifest.settings?.iv) {
                     try {
                         const settingsResponse = await fetch(
@@ -2676,7 +2785,7 @@
                     }
                 }
                 finishEncryptedSettings(encryptedPageSettings);
-                const photoItems = manifest.photos || [];
+                const bundleSegments = await photoBundlePromise;
                 const records = new Array(photoItems.length);
                 let nextPhotoIndex = 0;
                 const loadNextPhoto = async () => {
@@ -2684,12 +2793,16 @@
                         const index = nextPhotoIndex++;
                         const item = photoItems[index];
                         try {
-                            const response = await fetch(item.file, { cache: 'no-store' });
-                            if(!response.ok) continue;
-                            const decrypted = decryptGalleryPayload(
-                                await response.arrayBuffer(),
+                            let payload = bundleSegments?.[index];
+                            if(!payload) {
+                                const response = await fetch(item.file, { cache: 'default' });
+                                if(!response.ok) continue;
+                                payload = await response.arrayBuffer();
+                            }
+                            const decrypted = await decryptGalleryPayloadAsync(
+                                payload,
                                 item.iv,
-                                keyWords
+                                keyText
                             );
                             const type = item.type || 'image/jpeg';
                             records[index] = {
@@ -2703,7 +2816,7 @@
                         }
                     }
                 };
-                const workerCount = Math.min(4, photoItems.length);
+                const workerCount = Math.min(8, photoItems.length);
                 await Promise.all(
                     Array.from({ length: workerCount }, () => loadNextPhoto())
                 );
@@ -3139,6 +3252,10 @@
                 applySettings(deviceSettings, { rebuildScene: false });
             }
         });
+        photoGalleryReady.then(
+            () => setTimeout(primeBackgroundMusic, 300),
+            () => setTimeout(primeBackgroundMusic, 300)
+        );
     </script>
     <script>
         window.loveSceneController = (() => {

@@ -1077,7 +1077,7 @@
         const state = {
             explosion: 0.0, targetExplosion: 0.0, photoActive: false, treeHeight: 70, rotationSpeed: 0.002,
             style: 'rose', // 'rose' or 'gold'
-            lastFrameTime: 0, photoIndex: -1, cameraHidden: false
+            lastFrameTime: 0, photoIndex: -1, cameraHidden: false, explosionSpeed: 1.5
         };
 
         const dependencyLoads = new Map();
@@ -1942,7 +1942,9 @@
             if(state.uniforms) {
                 state.uniforms.uTime.value = t;
                 state.uniforms.uBeat.value = beat;
-                const followSpeed = state.targetExplosion > state.explosion ? 24 : 18;
+                const followSpeed = state.targetExplosion > state.explosion
+                    ? Math.max(1.5, state.explosionSpeed)
+                    : 18;
                 const follow = 1 - Math.exp(-deltaTime * followSpeed);
                 state.explosion += (state.targetExplosion - state.explosion) * follow;
                 if(Math.abs(state.targetExplosion - state.explosion) < 0.001) {
@@ -2093,7 +2095,12 @@
                 explosionOpenFrames: 0,
                 explosionClosedFrames: 0,
                 explosionMissingFrames: 0,
-                explosionLatched: false
+                explosionLatched: false,
+                lastRightHandAt: 0,
+                lastRightPalmX: 0,
+                lastRightPalmY: 0,
+                lastRightOpenness: null,
+                handActivity: 0
             };
             hands.onResults(results => {
                 if(window.loveSceneController?.isActive()) {
@@ -2163,6 +2170,39 @@
                                 return distanceFromWrist(lm[tip]) >
                                     distanceFromWrist(lm[pip]) * 1.08;
                             }).length;
+                            const rightNow = performance.now();
+                            const palmX = (lm[0].x + lm[9].x) * 0.5;
+                            const palmY = (lm[0].y + lm[9].y) * 0.5;
+                            const openness = Math.min(
+                                1,
+                                (extendedFingerCount + Math.min(1, d / 0.25)) / 5
+                            );
+                            if(gestureState.lastRightHandAt > 0) {
+                                const dt = Math.max(
+                                    0.016,
+                                    (rightNow - gestureState.lastRightHandAt) / 1000
+                                );
+                                const movement = Math.hypot(
+                                    palmX - gestureState.lastRightPalmX,
+                                    palmY - gestureState.lastRightPalmY
+                                );
+                                const opennessChange = gestureState.lastRightOpenness === null
+                                    ? 0
+                                    : Math.abs(openness - gestureState.lastRightOpenness);
+                                const rawActivity =
+                                    Math.max(0, movement - 0.0015) / dt * 0.9 +
+                                    Math.max(0, opennessChange - 0.01) / dt * 0.8;
+                                gestureState.handActivity =
+                                    gestureState.handActivity * 0.58 + rawActivity * 0.42;
+                                state.explosionSpeed = Math.min(
+                                    26,
+                                    1.5 + gestureState.handActivity * 8
+                                );
+                            }
+                            gestureState.lastRightHandAt = rightNow;
+                            gestureState.lastRightPalmX = palmX;
+                            gestureState.lastRightPalmY = palmY;
+                            gestureState.lastRightOpenness = openness;
                             const isFiveFingerOpen = extendedFingerCount === 4 && d > 0.15;
                             if(isFiveFingerOpen) {
                                 gestureState.explosionOpenFrames++;
@@ -2206,6 +2246,10 @@
                         gestureState.explosionOpenFrames = 0;
                         gestureState.explosionClosedFrames = 0;
                         gestureState.explosionLatched = false;
+                        gestureState.lastRightHandAt = 0;
+                        gestureState.lastRightOpenness = null;
+                        gestureState.handActivity = 0;
+                        state.explosionSpeed = 1.5;
                     }
                 }
                 state.targetExplosion = gestureState.explosionLatched ? 1 : 0;

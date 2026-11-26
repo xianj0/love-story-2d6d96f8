@@ -1523,13 +1523,16 @@
             })()
                 .then(blob => {
                     backgroundMusicBlobUrl = URL.createObjectURL(blob);
-                    if(
+                    const shouldResumeAfterBuffering = Boolean(audioEl && !audioEl.paused);
+                    const shouldSwitchToBufferedAudio =
                         audioEl &&
                         !storedMusicRecord?.blob &&
-                        audioEl.paused &&
-                        audioEl.currentTime === 0
+                        (audioEl.paused || audioEl.readyState < HTMLMediaElement.HAVE_FUTURE_DATA);
+                    if(
+                        shouldSwitchToBufferedAudio
                     ) {
                         setBackgroundAudio(blob);
+                        if(shouldResumeAfterBuffering) audioEl.play().catch(() => {});
                     }
                     return blob;
                 })
@@ -1543,6 +1546,13 @@
             audioEl.preload = 'auto';
             audioEl.playsInline = true;
             audioEl.setAttribute('playsinline', '');
+            audioEl.addEventListener('playing', () => {
+                document.getElementById('btn-play-pause').innerText = '⏸';
+                updateMusicStatus(storedMusicRecord);
+            });
+            audioEl.addEventListener('waiting', () => {
+                document.getElementById('music-status').textContent = '当前音乐：正在缓冲…';
+            });
             audioEl.volume = Number(document.getElementById('volume-slider').value) || 0.6;
             if(storedMusicRecord?.blob) {
                 setBackgroundAudio(storedMusicRecord.blob);
@@ -1568,6 +1578,7 @@
         async function playBackgroundMusic() {
             try {
                 if(storedMusicRecord?.blob) setBackgroundAudio(storedMusicRecord.blob);
+                document.getElementById('btn-play-pause').innerText = '…';
                 const playAttempt = audioEl.play();
                 audioCtx?.resume().catch(() => {});
                 await playAttempt;
@@ -3312,10 +3323,7 @@
                 applySettings(deviceSettings, { rebuildScene: false });
             }
         });
-        photoGalleryReady.then(
-            () => setTimeout(primeBackgroundMusic, 300),
-            () => setTimeout(primeBackgroundMusic, 300)
-        );
+        setTimeout(primeBackgroundMusic, 250);
     </script>
     <script>
         window.loveSceneController = (() => {

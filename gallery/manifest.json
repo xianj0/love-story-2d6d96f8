@@ -77,5 +77,15 @@
       "iv": "f8b24767ebea185f19cee8444a904ba2"
     }
   ],
-  "photoBundle": "gallery/photos.bundle"
+  "photoBundle": "gallery/photos.bundle",
+  "photoBundleParts": [
+    "gallery/photos.bundle.part01?v=ad85b2d2ddbe",
+    "gallery/photos.bundle.part02?v=ad85b2d2ddbe",
+    "gallery/photos.bundle.part03?v=ad85b2d2ddbe",
+    "gallery/photos.bundle.part04?v=ad85b2d2ddbe",
+    "gallery/photos.bundle.part05?v=ad85b2d2ddbe",
+    "gallery/photos.bundle.part06?v=ad85b2d2ddbe",
+    "gallery/photos.bundle.part07?v=ad85b2d2ddbe",
+    "gallery/photos.bundle.part08?v=ad85b2d2ddbe"
+  ]
 }

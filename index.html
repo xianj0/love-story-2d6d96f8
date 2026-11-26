@@ -139,6 +139,8 @@
         .btn { width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; cursor: pointer; border-radius: 6px; font-size: 12px; transition: 0.2s; }
         .btn:hover { background: rgba(255,255,255,0.2); }
         .btn.active { background: linear-gradient(90deg, #ff7675, #d63031); border:none; font-weight:bold; }
+        #btn-landscape, #landscape-status { display: none; }
+        #landscape-status { margin-top: 7px; color: #ffd0df; font-size: 11px; text-align: center; }
 
         h3 { margin: 0 0 10px 0; font-size: 14px; color: #ffd0df; font-weight: bold; }
 
@@ -183,6 +185,13 @@
             #main-title { top: 12px; }
             #input_video { width: 128px; height: 96px; }
             #ui-panel { width: min(300px, calc(100vw - 40px)); }
+        }
+        @media (max-width: 900px), (pointer: coarse) {
+            #btn-landscape, #landscape-status { display: block; }
+        }
+        @media (orientation: landscape) and (max-height: 600px) {
+            #ui-panel { top: 54px; max-height: calc(100vh - 66px); }
+            #main-title { top: 8px; }
         }
 
         /* === 视频同款粉彩开场与爱心纸条过渡 === */
@@ -895,7 +904,11 @@
     <!-- 控制面板 -->
     <div id="ui-panel">
         <div class="control-group">
-            <button id="btn-fullscreen" class="btn">⛶ 全屏模式</button>
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">
+                <button id="btn-fullscreen" class="btn">⛶ 全屏模式</button>
+                <button id="btn-landscape" class="btn">↻ 手机横屏</button>
+            </div>
+            <div id="landscape-status">手机点击横屏按钮，并开启自动旋转</div>
         </div>
 
         <div class="control-section">
@@ -1478,36 +1491,41 @@
 
         function initAudio() {
             audioEl = new Audio();
-            audioEl.crossOrigin = 'anonymous';
             audioEl.loop = true;
+            audioEl.preload = 'auto';
+            audioEl.playsInline = true;
+            audioEl.setAttribute('playsinline', '');
             audioEl.volume = Number(document.getElementById('volume-slider').value) || 0.6;
             if(storedMusicRecord?.blob) {
                 setBackgroundAudio(storedMusicRecord.blob);
             } else {
                 audioEl.src = 'music/always.mp3?v=1';
             }
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioCtx = new AudioContext();
-            analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 256;
-            dataArray = new Uint8Array(analyser.frequencyBinCount);
-            const source = audioCtx.createMediaElementSource(audioEl);
-            source.connect(analyser);
-            analyser.connect(audioCtx.destination);
-            audioCtx.resume().catch(() => {});
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 256;
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+                const source = audioCtx.createMediaElementSource(audioEl);
+                source.connect(analyser);
+                analyser.connect(audioCtx.destination);
+                audioCtx.resume().catch(() => {});
+            } catch(err) {
+                console.warn('音乐可视化初始化失败，将直接播放音乐');
+            }
         }
 
         async function playBackgroundMusic() {
             try {
-                const record = storedMusicRecord?.blob
-                    ? storedMusicRecord
-                    : await storedMusicReady;
-                if(record?.blob) setBackgroundAudio(record.blob);
-                await audioCtx?.resume();
-                await audioEl.play();
+                if(storedMusicRecord?.blob) setBackgroundAudio(storedMusicRecord.blob);
+                const playAttempt = audioEl.play();
+                audioCtx?.resume().catch(() => {});
+                await playAttempt;
                 document.getElementById('btn-play-pause').innerText = '⏸';
             } catch(err) {
                 console.warn('背景音乐播放失败：', err);
+                document.getElementById('music-status').textContent = '当前音乐：点击页面后重试';
             }
         }
 
@@ -2802,13 +2820,40 @@
 
         function setupUI() {
             const fsBtn = document.getElementById('btn-fullscreen');
-            fsBtn.addEventListener('click', () => {
-                if(!document.fullscreenElement) {
-                    document.documentElement.requestFullscreen();
-                    fsBtn.innerText = "❌ 退出全屏模式";
-                } else {
-                    document.exitFullscreen();
-                    fsBtn.innerText = "⛶ 全屏模式";
+            const landscapeBtn = document.getElementById('btn-landscape');
+            const landscapeStatus = document.getElementById('landscape-status');
+            fsBtn.addEventListener('click', async () => {
+                try {
+                    if(!document.fullscreenElement) {
+                        await document.documentElement.requestFullscreen();
+                        fsBtn.innerText = "❌ 退出全屏模式";
+                    } else {
+                        await document.exitFullscreen();
+                        fsBtn.innerText = "⛶ 全屏模式";
+                    }
+                } catch(err) {
+                    console.warn('全屏模式切换失败');
+                }
+            });
+            landscapeBtn.addEventListener('click', async () => {
+                try {
+                    if(!document.fullscreenElement) {
+                        await document.documentElement.requestFullscreen();
+                        fsBtn.innerText = "❌ 退出全屏模式";
+                    }
+                    if(screen.orientation?.lock) {
+                        await screen.orientation.lock('landscape');
+                        landscapeStatus.textContent = '横屏模式已开启';
+                    } else {
+                        landscapeStatus.textContent = '请把手机横过来，并开启自动旋转';
+                    }
+                } catch(err) {
+                    landscapeStatus.textContent = '请把手机横过来，并开启自动旋转';
+                }
+            });
+            screen.orientation?.addEventListener?.('change', () => {
+                if(window.innerWidth > window.innerHeight) {
+                    landscapeStatus.textContent = '横屏模式已开启';
                 }
             });
             document.getElementById('btn-toggle-cam').addEventListener('click', () => {
@@ -3053,11 +3098,15 @@
             }
         }
 
-        const bootSettings = loadSettings();
+        const hasEncryptedLink = Boolean(getEncryptedGalleryKey());
+        const deviceSettings = loadSettings();
+        const bootSettings = hasEncryptedLink ? null : deviceSettings;
         if(bootSettings) applySettings(bootSettings, { rebuildScene: false });
         encryptedPageSettingsReady.then(settings => {
             if(settings) {
                 applySettings(settings, { rebuildScene: false });
+            } else if(hasEncryptedLink && deviceSettings) {
+                applySettings(deviceSettings, { rebuildScene: false });
             }
         });
     </script>

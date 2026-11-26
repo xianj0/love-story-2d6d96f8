@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
     <meta name="robots" content="noindex, nofollow, noarchive">
     <title>浪漫生日蛋糕 · 手控粒子动画</title>
     <!-- 引入多种字体：Great Vibes(英手写), Ma Shan Zheng(中毛笔), Long Cang(中草书) -->
@@ -985,8 +986,9 @@
                 <label>背景音乐</label>
                 <button class="btn" onclick="document.getElementById('music-input').click()">📁 上传 MP3</button>
                 <input type="file" id="music-input" accept="audio/*" style="display:none;">
+                <div id="music-status" style="margin-top:7px;font-size:11px;color:#a18e93;">当前音乐：默认音乐</div>
                 <div style="display:flex; gap:10px; margin-top:5px;">
-                    <button id="btn-play-pause" class="btn" style="width:40px;">⏸</button>
+                    <button id="btn-play-pause" class="btn" style="width:40px;">▶</button>
                     <input type="range" id="volume-slider" min="0" max="1" step="0.1" value="0.6">
                 </div>
             </div>
@@ -994,6 +996,8 @@
                 <label>照片管理</label>
                 <button class="btn" style="background:linear-gradient(90deg, #00b894, #00cec9); color:black;" onclick="document.getElementById('folder-input').click()">📷 导入照片 (多选)</button>
                 <input type="file" id="folder-input" multiple accept="image/*" style="display:none;">
+                <button id="btn-export-photos" type="button" class="btn" style="margin-top:8px;">🔐 导出照片包（仅本地加密用）</button>
+                <div id="encrypted-photo-status" style="margin-top:7px;font-size:11px;color:#a18e93;">加密相册：未启用</div>
             </div>
             <div class="control-group">
                 <label>辅助显示</label>
@@ -1116,8 +1120,34 @@
         let photoDBPromise = null;
         let storedPhotoRecords = [];
         let photoObjectUrls = [];
-        const photoGalleryReady = loadPersistedPhotos();
+        let encryptedPhotoRecords = [];
+        let encryptedPageSettings = null;
+        const encryptedGalleryReady = loadEncryptedGallery().catch(err => {
+            console.warn('加密照片加载失败：', err);
+            return [];
+        });
+        const photoGalleryReady = Promise.all([loadPersistedPhotos(), encryptedGalleryReady])
+            .then(async () => {
+                await rebuildAllPhotos();
+                return encryptedPhotoRecords.length + storedPhotoRecords.length;
+            });
         const SETTINGS_KEY = 'romanticBirthdayCakeSettingsV1';
+        const MUSIC_DB_NAME = 'romanticBirthdayCakeMusicV1';
+        const MUSIC_STORE_NAME = 'tracks';
+        const MUSIC_RECORD_ID = 'background';
+        let musicDBPromise = null;
+        let storedMusicRecord = null;
+        let musicObjectUrl = '';
+        const storedMusicReady = loadStoredMusic()
+            .then(record => {
+                storedMusicRecord = record;
+                updateMusicStatus(record);
+                return record;
+            })
+            .catch(err => {
+                console.warn('读取背景音乐失败：', err);
+                return null;
+            });
         const KITTY_TOPPER_DATA = 'kitty-topper.webp?v=1';
         
         const introNotes = document.getElementById('intro-notes');
@@ -1223,6 +1253,7 @@
                 state.rotationSpeed = Number(savedSettings.rotationSpeed) || 0.002;
             }
             initAudio();
+            playBackgroundMusic();
             const threeReady = ensureThree();
             let threeInitialized = false;
             const initializeThreeScene = () => {
@@ -1327,13 +1358,113 @@
             document.getElementById(id).addEventListener('input', updateCustomTextViews);
         });
 
+        function getMusicDatabase() {
+            if(musicDBPromise) return musicDBPromise;
+            musicDBPromise = new Promise((resolve, reject) => {
+                if(typeof indexedDB === 'undefined') {
+                    reject(new Error('当前浏览器不支持本地音乐存储'));
+                    return;
+                }
+                const request = indexedDB.open(MUSIC_DB_NAME, 1);
+                request.onupgradeneeded = () => {
+                    const db = request.result;
+                    if(!db.objectStoreNames.contains(MUSIC_STORE_NAME)) {
+                        db.createObjectStore(MUSIC_STORE_NAME, { keyPath: 'id' });
+                    }
+                };
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error || new Error('音乐数据库打开失败'));
+            });
+            return musicDBPromise;
+        }
+
+        async function readStoredMusic() {
+            const db = await getMusicDatabase();
+            return new Promise((resolve, reject) => {
+                const request = db.transaction(MUSIC_STORE_NAME, 'readonly')
+                    .objectStore(MUSIC_STORE_NAME)
+                    .get(MUSIC_RECORD_ID);
+                request.onsuccess = () => resolve(request.result || null);
+                request.onerror = () => reject(request.error || new Error('背景音乐读取失败'));
+            });
+        }
+
+        async function writeStoredMusic(file) {
+            const db = await getMusicDatabase();
+            const record = {
+                id: MUSIC_RECORD_ID,
+                name: file.name || 'background-music',
+                type: file.type || 'audio/mpeg',
+                blob: file,
+                updatedAt: Date.now()
+            };
+            await new Promise((resolve, reject) => {
+                const transaction = db.transaction(MUSIC_STORE_NAME, 'readwrite');
+                transaction.objectStore(MUSIC_STORE_NAME).put(record);
+                transaction.oncomplete = () => resolve();
+                transaction.onerror = () => reject(transaction.error || new Error('背景音乐保存失败'));
+                transaction.onabort = () => reject(transaction.error || new Error('背景音乐保存被中断'));
+            });
+            storedMusicRecord = record;
+            return record;
+        }
+
+        function updateMusicStatus(record) {
+            const status = document.getElementById('music-status');
+            if(!status) return;
+            status.textContent = record?.name
+                ? `当前音乐：${record.name}`
+                : '当前音乐：默认音乐';
+        }
+
+        function loadStoredMusic() {
+            return readStoredMusic().catch(err => {
+                console.warn('读取背景音乐失败：', err);
+                return null;
+            });
+        }
+
+        function setBackgroundAudio(blob) {
+            if(!audioEl || !(blob instanceof Blob)) return;
+            if(musicObjectUrl) URL.revokeObjectURL(musicObjectUrl);
+            musicObjectUrl = URL.createObjectURL(blob);
+            audioEl.src = musicObjectUrl;
+            audioEl.load();
+        }
+
         function initAudio() {
-            audioEl = new Audio(); audioEl.crossOrigin = "anonymous";
-            audioEl.src = "https://thirdparty.gtimg.com/C1000007bNrR1HXkjD.m4a?fromtag=38"; audioEl.loop = true;
-            const AudioContext = window.AudioContext || window.webkitAudioContext; audioCtx = new AudioContext();
-            analyser = audioCtx.createAnalyser(); analyser.fftSize = 256; dataArray = new Uint8Array(analyser.frequencyBinCount);
-            const source = audioCtx.createMediaElementSource(audioEl); source.connect(analyser); analyser.connect(audioCtx.destination);
-            audioEl.play().catch(e => console.log(e));
+            audioEl = new Audio();
+            audioEl.crossOrigin = 'anonymous';
+            audioEl.loop = true;
+            audioEl.volume = Number(document.getElementById('volume-slider').value) || 0.6;
+            if(storedMusicRecord?.blob) {
+                setBackgroundAudio(storedMusicRecord.blob);
+            } else {
+                audioEl.src = 'https://thirdparty.gtimg.com/C1000007bNrR1HXkjD.m4a?fromtag=38';
+            }
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 256;
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+            const source = audioCtx.createMediaElementSource(audioEl);
+            source.connect(analyser);
+            analyser.connect(audioCtx.destination);
+            audioCtx.resume().catch(() => {});
+        }
+
+        async function playBackgroundMusic() {
+            try {
+                const record = storedMusicRecord?.blob
+                    ? storedMusicRecord
+                    : await storedMusicReady;
+                if(record?.blob) setBackgroundAudio(record.blob);
+                await audioCtx?.resume();
+                await audioEl.play();
+                document.getElementById('btn-play-pause').innerText = '⏸';
+            } catch(err) {
+                console.warn('背景音乐播放失败：', err);
+            }
         }
 
         function initThree() {
@@ -2361,11 +2492,101 @@
             document.getElementById('photo-modal').classList.remove('active');
         }
 
+        function decodeBase64Url(value) {
+            const normalized = String(value || '')
+                .replace(/-/g, '+')
+                .replace(/_/g, '/');
+            const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+            const binary = atob(padded);
+            return Uint8Array.from(binary, char => char.charCodeAt(0));
+        }
+
+        async function loadEncryptedGallery() {
+            const keyText = new URLSearchParams(location.hash.slice(1)).get('gallery');
+            if(!keyText || !crypto?.subtle) return [];
+            try {
+                const manifestResponse = await fetch('gallery/manifest.json', { cache: 'no-store' });
+                if(!manifestResponse.ok) return [];
+                const manifest = await manifestResponse.json();
+                const rawKey = decodeBase64Url(keyText);
+                if(rawKey.length !== 32) return [];
+                const key = await crypto.subtle.importKey(
+                    'raw',
+                    rawKey,
+                    { name: 'AES-GCM' },
+                    false,
+                    ['decrypt']
+                );
+                if(manifest.settings?.file && manifest.settings?.iv) {
+                    try {
+                        const settingsResponse = await fetch(
+                            manifest.settings.file,
+                            { cache: 'no-store' }
+                        );
+                        if(settingsResponse.ok) {
+                            const encryptedSettings = await settingsResponse.arrayBuffer();
+                            const decryptedSettings = await crypto.subtle.decrypt(
+                                {
+                                    name: 'AES-GCM',
+                                    iv: decodeBase64Url(manifest.settings.iv)
+                                },
+                                key,
+                                encryptedSettings
+                            );
+                            encryptedPageSettings = JSON.parse(
+                                new TextDecoder().decode(decryptedSettings)
+                            );
+                        }
+                    } catch(err) {
+                        console.warn('加密页面设置解密失败');
+                    }
+                }
+                const records = [];
+                for(const item of manifest.photos || []) {
+                    try {
+                        const response = await fetch(item.file, { cache: 'no-store' });
+                        if(!response.ok) continue;
+                        const encrypted = await response.arrayBuffer();
+                        const decrypted = await crypto.subtle.decrypt(
+                            { name: 'AES-GCM', iv: decodeBase64Url(item.iv) },
+                            key,
+                            encrypted
+                        );
+                        const type = item.type || 'image/jpeg';
+                        records.push({
+                            name: item.name || `encrypted-photo-${records.length + 1}`,
+                            type,
+                            blob: new Blob([decrypted], { type }),
+                            createdAt: item.createdAt || Date.now()
+                        });
+                    } catch(err) {
+                        console.warn('单张加密照片解密失败');
+                    }
+                }
+                encryptedPhotoRecords = records;
+                const encryptedStatus = document.getElementById('encrypted-photo-status');
+                if(encryptedStatus) {
+                    encryptedStatus.textContent = `加密相册：已解密 ${records.length} 张照片`;
+                }
+                return records;
+            } catch(err) {
+                console.warn('加密相册不可用');
+                const encryptedStatus = document.getElementById('encrypted-photo-status');
+                if(encryptedStatus) encryptedStatus.textContent = '加密相册：解密失败';
+                return [];
+            }
+        }
+
+        async function rebuildAllPhotos() {
+            const records = [...encryptedPhotoRecords, ...storedPhotoRecords];
+            const built = await buildPhotoImages(records);
+            replaceLoadedPhotos(built);
+            return built;
+        }
+
         async function loadPersistedPhotos() {
             try {
                 storedPhotoRecords = await readPhotoGallery();
-                const built = await buildPhotoImages(storedPhotoRecords);
-                replaceLoadedPhotos(built);
                 return storedPhotoRecords.length;
             } catch(err) {
                 console.warn('读取已保存照片失败：', err);
@@ -2418,10 +2639,64 @@
 
             const mergedRecords = [...storedPhotoRecords, ...records];
             await writePhotoGallery(mergedRecords);
-            const built = await buildPhotoImages(mergedRecords);
             storedPhotoRecords = mergedRecords;
-            replaceLoadedPhotos(built);
+            await rebuildAllPhotos();
             return records.length;
+        }
+
+        function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const result = String(reader.result || '');
+                    resolve(result.slice(result.indexOf(',') + 1));
+                };
+                reader.onerror = () => reject(reader.error || new Error('照片读取失败'));
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        async function exportPhotoPackage() {
+            try {
+                await photoGalleryReady.catch(() => {});
+                const records = await readPhotoGallery();
+                if(records.length === 0) {
+                    alert('还没有导入照片。');
+                    return;
+                }
+                const photos = [];
+                for(const record of records) {
+                    if(!(record?.blob instanceof Blob)) continue;
+                    photos.push({
+                        name: record.name || 'photo',
+                        type: record.type || record.blob.type || 'image/jpeg',
+                        createdAt: record.createdAt || Date.now(),
+                        data: await blobToBase64(record.blob)
+                    });
+                }
+                const payload = {
+                    version: 1,
+                    exportedAt: new Date().toISOString(),
+                    settings: collectSettings(),
+                    photos
+                };
+                const blob = new Blob(
+                    [JSON.stringify(payload)],
+                    { type: 'application/json' }
+                );
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `birthday-export-${Date.now()}.json`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                showSaveStatus(`已导出 ${photos.length} 张照片和当前页面设置。`);
+            } catch(err) {
+                console.error('照片与设置导出失败：', err);
+                alert('导出失败，请重试。');
+            }
         }
 
         function setupUI() {
@@ -2451,8 +2726,20 @@
                 state.rotationSpeed = parseFloat(e.target.value);
                 document.getElementById('val-rot').innerText = state.rotationSpeed.toFixed(3);
             });
-            document.getElementById('music-input').addEventListener('change', (e) => {
-                if(e.target.files[0]) { audioEl.src = URL.createObjectURL(e.target.files[0]); audioEl.play(); }
+            document.getElementById('music-input').addEventListener('change', async (e) => {
+                const file = e.target.files?.[0];
+                if(!file) return;
+                try {
+                    const record = await writeStoredMusic(file);
+                    updateMusicStatus(record);
+                    setBackgroundAudio(file);
+                    await audioCtx?.resume();
+                    await audioEl.play();
+                    document.getElementById('btn-play-pause').innerText = '⏸';
+                } catch(err) {
+                    console.error('背景音乐保存失败：', err);
+                    alert('背景音乐保存失败，请检查浏览器存储权限。');
+                }
             });
             document.getElementById('btn-play-pause').addEventListener('click', () => {
                 if(audioEl.paused) {
@@ -2478,6 +2765,7 @@
                     e.target.value = '';
                 }
             });
+            document.getElementById('btn-export-photos').addEventListener('click', exportPhotoPackage);
             document.getElementById('tree-height').addEventListener('input', (e) => {
                 state.treeHeight = parseInt(e.target.value);
                 createParticles();
@@ -2665,6 +2953,11 @@
 
         const bootSettings = loadSettings();
         if(bootSettings) applySettings(bootSettings, { rebuildScene: false });
+        encryptedGalleryReady.then(() => {
+            if(encryptedPageSettings) {
+                applySettings(encryptedPageSettings, { rebuildScene: false });
+            }
+        });
     </script>
     <script>
         window.loveSceneController = (() => {

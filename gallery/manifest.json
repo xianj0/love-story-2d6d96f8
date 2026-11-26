@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "settings": {
+    "file": "gallery/settings.bin",
+    "iv": "WIJmPCQbdzSK7xwO"
+  },
+  "photos": [
+    {
+      "file": "gallery/photo-001.bin",
+      "type": "image/jpeg",
+      "iv": "bQOxeBVTZrCFjFRb"
+    },
+    {
+      "file": "gallery/photo-002.bin",
+      "type": "image/jpeg",
+      "iv": "Oc1D1Va45vEExjO7"
+    },
+    {
+      "file": "gallery/photo-003.bin",
+      "type": "image/jpeg",
+      "iv": "opuTH68PGUnqvKLI"
+    },
+    {
+      "file": "gallery/photo-004.bin",
+      "type": "image/jpeg",
+      "iv": "XbesitTYGbAHRm1-"
+    },
+    {
+      "file": "gallery/photo-005.bin",
+      "type": "image/jpeg",
+      "iv": "lJ0Y8OfLw8zrxU9B"
+    },
+    {
+      "file": "gallery/photo-006.bin",
+      "type": "image/jpeg",
+      "iv": "qQ96GEM9kG1ZVnWh"
+    },
+    {
+      "file": "gallery/photo-007.bin",
+      "type": "image/jpeg",
+      "iv": "Sx_NAuv6aatCFlJM"
+    },
+    {
+      "file": "gallery/photo-008.bin",
+      "type": "image/jpeg",
+      "iv": "LHrehHekV4ARQGZS"
+    },
+    {
+      "file": "gallery/photo-009.bin",
+      "type": "image/jpeg",
+      "iv": "_EyvvCQvBtjjitPx"
+    },
+    {
+      "file": "gallery/photo-010.bin",
+      "type": "image/jpeg",
+      "iv": "od_lAfJdQlqeZe7X"
+    },
+    {
+      "file": "gallery/photo-011.bin",
+      "type": "image/jpeg",
+      "iv": "_nxiQFcU53qYif3G"
+    },
+    {
+      "file": "gallery/photo-012.bin",
+      "type": "image/jpeg",
+      "iv": "Dqb88pPLK5zcDyvW"
+    },
+    {
+      "file": "gallery/photo-013.bin",
+      "type": "image/jpeg",
+      "iv": "8qDosi9d7OmtFQzk"
+    },
+    {
+      "file": "gallery/photo-014.bin",
+      "type": "image/jpeg",
+      "iv": "qH0rBJN-HgC3jOOu"
+    }
+  ]
+}

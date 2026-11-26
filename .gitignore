@@ -1,0 +1,9 @@
+private-photos/
+raw-photos/
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.heic
+*.dng
+*.raw

@@ -3,7 +3,7 @@
   "algorithm": "AES-256-CBC+HMAC-SHA256",
   "settings": {
     "file": "gallery/settings.bin",
-    "iv": "aa4907fda2d680c9bf407bfbf42c7a06"
+    "iv": "c77602852fad3a20b1ace524c9292254"
   },
   "photos": [
     {

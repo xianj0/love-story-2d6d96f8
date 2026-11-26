@@ -989,7 +989,7 @@
                 <label>背景音乐</label>
                 <button class="btn" onclick="document.getElementById('music-input').click()">📁 上传 MP3</button>
                 <input type="file" id="music-input" accept="audio/*" style="display:none;">
-                <div id="music-status" style="margin-top:7px;font-size:11px;color:#a18e93;">当前音乐：默认音乐</div>
+                <div id="music-status" style="margin-top:7px;font-size:11px;color:#a18e93;">当前音乐：Always.mp3</div>
                 <div style="display:flex; gap:10px; margin-top:5px;">
                     <button id="btn-play-pause" class="btn" style="width:40px;">▶</button>
                     <input type="range" id="volume-slider" min="0" max="1" step="0.1" value="0.6">
@@ -1458,7 +1458,7 @@
             if(!status) return;
             status.textContent = record?.name
                 ? `当前音乐：${record.name}`
-                : '当前音乐：默认音乐';
+                : '当前音乐：Always.mp3';
         }
 
         function loadStoredMusic() {
@@ -1484,7 +1484,7 @@
             if(storedMusicRecord?.blob) {
                 setBackgroundAudio(storedMusicRecord.blob);
             } else {
-                audioEl.src = 'https://thirdparty.gtimg.com/C1000007bNrR1HXkjD.m4a?fromtag=38';
+                audioEl.src = 'music/always.mp3?v=1';
             }
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             audioCtx = new AudioContext();

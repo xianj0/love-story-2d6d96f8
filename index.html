@@ -1123,7 +1123,7 @@
         function ensureHands() {
             return window.Hands
                 ? Promise.resolve()
-                : loadDependency('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js', 'anonymous');
+                : loadDependency('mediapipe-hands/hands.js?v=0.4.1675469240');
         }
 
         let scene, camera, renderer, clock;
@@ -2265,7 +2265,11 @@
 
             await handsReady;
             if(typeof Hands === 'undefined') {
-                showStatus('摄像头已经打开，但手势识别组件加载失败。请检查网络后刷新页面。');
+                stream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+                video.classList.add('hidden-cam');
+                showStatus('手势识别暂不可用，已切换为点击控制。');
+                setTimeout(() => showStatus('', false), 5000);
                 return;
             }
 
@@ -2274,7 +2278,7 @@
             handCanvas.height = 288;
             const handCtx = handCanvas.getContext('2d', { alpha: false, desynchronized: true });
 
-            const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+            const hands = new Hands({locateFile: (file) => `mediapipe-hands/${file}`});
             hands.setOptions({
                 maxNumHands: 2,
                 modelComplexity: 0,

@@ -103,7 +103,7 @@
         #toggle-btn {
             position: absolute; top: 20px; right: 20px; width: 40px; height: 40px;
             background: rgba(255,255,255,0.1); border-radius: 50%; color: #fff;
-            border: 1px solid rgba(255,255,255,0.2); cursor: pointer; z-index: 101;
+            border: 1px solid rgba(255,255,255,0.2); cursor: pointer; z-index: 270;
             display: flex; justify-content: center; align-items: center; font-size: 18px;
         }
 
@@ -113,7 +113,7 @@
             max-height: 85vh; overflow-y: auto;
             background: rgba(15, 15, 20, 0.85); backdrop-filter: blur(15px);
             padding: 20px; border-radius: 12px; color: #fff;
-            border: 1px solid rgba(255,255,255,0.15); z-index: 100;
+            border: 1px solid rgba(255,255,255,0.15); z-index: 260;
             transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
             box-shadow: -5px 0 20px rgba(0,0,0,0.5);
         }
@@ -1310,6 +1310,7 @@
                 state.rotationSpeed = Number(savedSettings.rotationSpeed) || 0.002;
             }
             initAudio();
+            setupUI();
             playBackgroundMusic();
             const threeReady = ensureThree();
             let threeInitialized = false;
@@ -2819,6 +2820,8 @@
         }
 
         function setupUI() {
+            if(setupUI.ready) return;
+            setupUI.ready = true;
             const fsBtn = document.getElementById('btn-fullscreen');
             const landscapeBtn = document.getElementById('btn-landscape');
             const landscapeStatus = document.getElementById('landscape-status');
@@ -2903,7 +2906,7 @@
                 try {
                     const imported = await importPhotoFiles(files);
                     if(imported === 0) throw new Error('没有可导入的照片');
-                    updatePhotos();
+                    if(scene) updatePhotos();
                 } catch(err) {
                     console.error('照片保存失败：', err);
                     alert('照片保存失败，请检查浏览器存储权限后重试。');
@@ -2914,9 +2917,11 @@
             document.getElementById('btn-export-photos').addEventListener('click', exportPhotoPackage);
             document.getElementById('tree-height').addEventListener('input', (e) => {
                 state.treeHeight = parseInt(e.target.value);
-                createParticles();
-                createTopObject();
-                if(loadedImages.length > 0) updatePhotos(false);
+                if(scene) {
+                    createParticles();
+                    createTopObject();
+                    if(loadedImages.length > 0) updatePhotos(false);
+                }
             });
             document.getElementById('beat-sense').addEventListener('input', (e) => document.getElementById('beat-sense').value = e.target.value);
 
@@ -2958,9 +2963,11 @@
                     document.getElementById('theme-cny').classList.add('active');
                     document.getElementById('theme-xmas').classList.remove('active');
                 }
-                createParticles();
-                createTopObject();
-                if(loadedImages.length > 0) updatePhotos(false);
+                if(scene) {
+                    createParticles();
+                    createTopObject();
+                    if(loadedImages.length > 0) updatePhotos(false);
+                }
                 scheduleAutoSave();
             };
 

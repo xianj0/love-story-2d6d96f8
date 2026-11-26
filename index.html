@@ -1126,12 +1126,27 @@
         let encryptedPhotoRecords = [];
         let encryptedPageSettings = null;
         const encryptedGalleryReady = new Promise(resolve => {
+            let settled = false;
+            let started = false;
+            let attempts = 0;
+            const finish = records => {
+                if(settled) return;
+                settled = true;
+                resolve(records);
+            };
             const startEncryptedGallery = () => {
+                if(settled || started) return;
+                if(!getEncryptedGalleryKey() && attempts < 10) {
+                    attempts++;
+                    setTimeout(startEncryptedGallery, 100);
+                    return;
+                }
+                started = true;
                 loadEncryptedGallery()
-                    .then(resolve)
+                    .then(finish)
                     .catch(err => {
                         console.warn('加密照片加载失败：', err);
-                        resolve([]);
+                        finish([]);
                     });
             };
             if(document.readyState === 'loading') {
@@ -1141,8 +1156,9 @@
                     { once: true }
                 );
             } else {
-                startEncryptedGallery();
+                setTimeout(startEncryptedGallery, 0);
             }
+            window.addEventListener('load', startEncryptedGallery, { once: true });
         });
         const photoGalleryReady = Promise.all([loadPersistedPhotos(), encryptedGalleryReady])
             .then(async () => {
@@ -2518,43 +2534,55 @@
             return bytes;
         }
 
+        function getCryptoJsLib() {
+            if(typeof window.CryptoJS !== 'undefined') return window.CryptoJS;
+            return typeof CryptoJS !== 'undefined' ? CryptoJS : null;
+        }
+
+        function getEncryptedGalleryKey() {
+            const searchKey = new URLSearchParams(location.search).get('gallery');
+            const hashKey = new URLSearchParams(location.hash.slice(1)).get('gallery');
+            return (searchKey || hashKey || '').trim();
+        }
+
         function decryptGalleryPayload(buffer, ivHex, keyWords) {
+            const cryptoJs = getCryptoJsLib();
+            if(!cryptoJs) throw new Error('解密组件未加载');
             const encrypted = new Uint8Array(buffer);
             if(encrypted.length <= 32) throw new Error('加密数据不完整');
             const cipherBytes = encrypted.slice(0, -32);
             const tagBytes = encrypted.slice(-32);
-            const ivWords = CryptoJS.enc.Hex.parse(ivHex);
-            const cipherWords = CryptoJS.lib.WordArray.create(cipherBytes);
-            const actualTag = CryptoJS.enc.Hex.stringify(
-                CryptoJS.lib.WordArray.create(tagBytes)
+            const ivWords = cryptoJs.enc.Hex.parse(ivHex);
+            const cipherWords = cryptoJs.lib.WordArray.create(cipherBytes);
+            const actualTag = cryptoJs.enc.Hex.stringify(
+                cryptoJs.lib.WordArray.create(tagBytes)
             );
-            const expectedTag = CryptoJS.HmacSHA256(
+            const expectedTag = cryptoJs.HmacSHA256(
                 ivWords.clone().concat(cipherWords.clone()),
                 keyWords
             ).toString();
             if(actualTag !== expectedTag) throw new Error('完整性校验失败');
-            const decrypted = CryptoJS.AES.decrypt(
+            const decrypted = cryptoJs.AES.decrypt(
                 { ciphertext: cipherWords },
                 keyWords,
                 {
                     iv: ivWords,
-                    mode: CryptoJS.mode.CBC,
-                    padding: CryptoJS.pad.Pkcs7
+                    mode: cryptoJs.mode.CBC,
+                    padding: cryptoJs.pad.Pkcs7
                 }
             );
             return wordArrayToUint8Array(decrypted);
         }
 
         async function loadEncryptedGallery() {
-            const searchKey = new URLSearchParams(location.search).get('gallery');
-            const hashKey = new URLSearchParams(location.hash.slice(1)).get('gallery');
-            const keyText = (searchKey || hashKey || '').trim();
+            const keyText = getEncryptedGalleryKey();
+            const cryptoJs = getCryptoJsLib();
             const encryptedStatus = document.getElementById('encrypted-photo-status');
             if(!keyText) {
                 if(encryptedStatus) encryptedStatus.textContent = '加密相册：未启用';
                 return [];
             }
-            if(!window.CryptoJS) {
+            if(!cryptoJs) {
                 if(encryptedStatus) encryptedStatus.textContent = '加密相册：解密组件未加载';
                 return [];
             }
@@ -2562,6 +2590,7 @@
                 if(encryptedStatus) encryptedStatus.textContent = '加密相册：密钥格式错误';
                 return [];
             }
+            if(encryptedStatus) encryptedStatus.textContent = '加密相册：正在解密...';
             try {
                 const manifestResponse = await fetch('gallery/manifest.json', { cache: 'no-store' });
                 if(!manifestResponse.ok) {
@@ -2569,7 +2598,7 @@
                     return [];
                 }
                 const manifest = await manifestResponse.json();
-                const keyWords = CryptoJS.enc.Hex.parse(keyText);
+                const keyWords = cryptoJs.enc.Hex.parse(keyText);
                 if(manifest.settings?.file && manifest.settings?.iv) {
                     try {
                         const settingsResponse = await fetch(

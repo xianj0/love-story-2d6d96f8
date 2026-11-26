@@ -1100,6 +1100,9 @@
             lastFrameTime: 0, photoIndex: -1, cameraHidden: false, explosionSpeed: 1.5
         };
 
+        const HANDS_MIRROR_BASE = 'https://registry.npmmirror.com/@mediapipe/hands/0.4.1675469240/files/';
+        const HANDS_LOCAL_BASE = 'mediapipe-hands/';
+        let handsAssetBase = HANDS_MIRROR_BASE;
         const dependencyLoads = new Map();
         function loadDependency(src, crossOrigin = '') {
             if(dependencyLoads.has(src)) return dependencyLoads.get(src);
@@ -1123,7 +1126,10 @@
         function ensureHands() {
             return window.Hands
                 ? Promise.resolve()
-                : loadDependency('mediapipe-hands/hands.js?v=0.4.1675469240');
+                : loadDependency(`${HANDS_MIRROR_BASE}hands.js`).catch(() => {
+                    handsAssetBase = HANDS_LOCAL_BASE;
+                    return loadDependency('mediapipe-hands/hands.js?v=0.4.1675469240');
+                });
         }
 
         let scene, camera, renderer, clock;
@@ -2278,13 +2284,25 @@
             handCanvas.height = 288;
             const handCtx = handCanvas.getContext('2d', { alpha: false, desynchronized: true });
 
-            const hands = new Hands({locateFile: (file) => `mediapipe-hands/${file}`});
+            const hands = new Hands({locateFile: (file) => `${handsAssetBase}${file}`});
             hands.setOptions({
                 maxNumHands: 2,
                 modelComplexity: 0,
                 minDetectionConfidence: 0.45,
                 minTrackingConfidence: 0.45
             });
+            showStatus('正在加载手势识别模型…');
+            try {
+                await hands.initialize();
+            } catch(err) {
+                console.warn('手势识别模型初始化失败：', err);
+                stream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+                video.classList.add('hidden-cam');
+                showStatus('手势识别加载失败，已切换为点击控制。');
+                setTimeout(() => showStatus('', false), 5000);
+                return;
+            }
             const gestureState = {
                 photoArmed: true,
                 photoPinchFrames: 0,
@@ -2471,7 +2489,8 @@
                 requestAnimationFrame(processFrame);
             };
             requestAnimationFrame(processFrame);
-            showStatus('摄像头已开启', false);
+            showStatus('手势识别已启动，请把手放进摄像头画面。');
+            setTimeout(() => showStatus('', false), 4500);
         }
 
         function showNextPhoto() {

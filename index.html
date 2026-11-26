@@ -6,6 +6,7 @@
     <meta name="referrer" content="no-referrer">
     <meta name="robots" content="noindex, nofollow, noarchive">
     <title>浪漫生日蛋糕 · 手控粒子动画</title>
+    <script src="crypto-js.min.js?v=1"></script>
     <!-- 引入多种字体：Great Vibes(英手写), Ma Shan Zheng(中毛笔), Long Cang(中草书) -->
     <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Ma+Shan+Zheng&family=Long+Cang&family=Noto+Sans+SC:wght@700&family=Noto+Serif+SC:wght@400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
     <link rel="preload" href="tree-particles-v21.js?v=22" as="script">
@@ -2492,31 +2493,64 @@
             document.getElementById('photo-modal').classList.remove('active');
         }
 
-        function decodeBase64Url(value) {
-            const normalized = String(value || '')
-                .replace(/-/g, '+')
-                .replace(/_/g, '/');
-            const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
-            const binary = atob(padded);
-            return Uint8Array.from(binary, char => char.charCodeAt(0));
+        function wordArrayToUint8Array(wordArray) {
+            const bytes = new Uint8Array(wordArray.sigBytes);
+            for(let i = 0; i < wordArray.sigBytes; i++) {
+                bytes[i] = (wordArray.words[i >>> 2] >>> (24 - (i % 4) * 8)) & 0xff;
+            }
+            return bytes;
+        }
+
+        function decryptGalleryPayload(buffer, ivHex, keyWords) {
+            const encrypted = new Uint8Array(buffer);
+            if(encrypted.length <= 32) throw new Error('加密数据不完整');
+            const cipherBytes = encrypted.slice(0, -32);
+            const tagBytes = encrypted.slice(-32);
+            const ivWords = CryptoJS.enc.Hex.parse(ivHex);
+            const cipherWords = CryptoJS.lib.WordArray.create(cipherBytes);
+            const actualTag = CryptoJS.enc.Hex.stringify(
+                CryptoJS.lib.WordArray.create(tagBytes)
+            );
+            const expectedTag = CryptoJS.HmacSHA256(
+                ivWords.clone().concat(cipherWords.clone()),
+                keyWords
+            ).toString();
+            if(actualTag !== expectedTag) throw new Error('完整性校验失败');
+            const decrypted = CryptoJS.AES.decrypt(
+                { ciphertext: cipherWords },
+                keyWords,
+                {
+                    iv: ivWords,
+                    mode: CryptoJS.mode.CBC,
+                    padding: CryptoJS.pad.Pkcs7
+                }
+            );
+            return wordArrayToUint8Array(decrypted);
         }
 
         async function loadEncryptedGallery() {
             const keyText = new URLSearchParams(location.hash.slice(1)).get('gallery');
-            if(!keyText || !crypto?.subtle) return [];
+            const encryptedStatus = document.getElementById('encrypted-photo-status');
+            if(!keyText) {
+                if(encryptedStatus) encryptedStatus.textContent = '加密相册：未启用';
+                return [];
+            }
+            if(!window.CryptoJS) {
+                if(encryptedStatus) encryptedStatus.textContent = '加密相册：解密组件未加载';
+                return [];
+            }
+            if(keyText.length !== 64) {
+                if(encryptedStatus) encryptedStatus.textContent = '加密相册：密钥格式错误';
+                return [];
+            }
             try {
                 const manifestResponse = await fetch('gallery/manifest.json', { cache: 'no-store' });
-                if(!manifestResponse.ok) return [];
+                if(!manifestResponse.ok) {
+                    if(encryptedStatus) encryptedStatus.textContent = '加密相册：加密数据未发布';
+                    return [];
+                }
                 const manifest = await manifestResponse.json();
-                const rawKey = decodeBase64Url(keyText);
-                if(rawKey.length !== 32) return [];
-                const key = await crypto.subtle.importKey(
-                    'raw',
-                    rawKey,
-                    { name: 'AES-GCM' },
-                    false,
-                    ['decrypt']
-                );
+                const keyWords = CryptoJS.enc.Hex.parse(keyText);
                 if(manifest.settings?.file && manifest.settings?.iv) {
                     try {
                         const settingsResponse = await fetch(
@@ -2524,14 +2558,10 @@
                             { cache: 'no-store' }
                         );
                         if(settingsResponse.ok) {
-                            const encryptedSettings = await settingsResponse.arrayBuffer();
-                            const decryptedSettings = await crypto.subtle.decrypt(
-                                {
-                                    name: 'AES-GCM',
-                                    iv: decodeBase64Url(manifest.settings.iv)
-                                },
-                                key,
-                                encryptedSettings
+                            const decryptedSettings = decryptGalleryPayload(
+                                await settingsResponse.arrayBuffer(),
+                                manifest.settings.iv,
+                                keyWords
                             );
                             encryptedPageSettings = JSON.parse(
                                 new TextDecoder().decode(decryptedSettings)
@@ -2546,11 +2576,10 @@
                     try {
                         const response = await fetch(item.file, { cache: 'no-store' });
                         if(!response.ok) continue;
-                        const encrypted = await response.arrayBuffer();
-                        const decrypted = await crypto.subtle.decrypt(
-                            { name: 'AES-GCM', iv: decodeBase64Url(item.iv) },
-                            key,
-                            encrypted
+                        const decrypted = decryptGalleryPayload(
+                            await response.arrayBuffer(),
+                            item.iv,
+                            keyWords
                         );
                         const type = item.type || 'image/jpeg';
                         records.push({
@@ -2564,14 +2593,12 @@
                     }
                 }
                 encryptedPhotoRecords = records;
-                const encryptedStatus = document.getElementById('encrypted-photo-status');
                 if(encryptedStatus) {
                     encryptedStatus.textContent = `加密相册：已解密 ${records.length} 张照片`;
                 }
                 return records;
             } catch(err) {
                 console.warn('加密相册不可用');
-                const encryptedStatus = document.getElementById('encrypted-photo-status');
                 if(encryptedStatus) encryptedStatus.textContent = '加密相册：解密失败';
                 return [];
             }

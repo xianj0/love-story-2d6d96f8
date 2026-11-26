@@ -1,79 +1,80 @@
 {
-  "version": 1,
+  "version": 2,
+  "algorithm": "AES-256-CBC+HMAC-SHA256",
   "settings": {
     "file": "gallery/settings.bin",
-    "iv": "WIJmPCQbdzSK7xwO"
+    "iv": "aa4907fda2d680c9bf407bfbf42c7a06"
   },
   "photos": [
     {
       "file": "gallery/photo-001.bin",
       "type": "image/jpeg",
-      "iv": "bQOxeBVTZrCFjFRb"
+      "iv": "39748fe2b59b733514388a303da45b6a"
     },
     {
       "file": "gallery/photo-002.bin",
       "type": "image/jpeg",
-      "iv": "Oc1D1Va45vEExjO7"
+      "iv": "0788e7cd4bd9f6860bc9b04ffe68f912"
     },
     {
       "file": "gallery/photo-003.bin",
       "type": "image/jpeg",
-      "iv": "opuTH68PGUnqvKLI"
+      "iv": "95d74f71de5c00cc12f9f59634ef866c"
     },
     {
       "file": "gallery/photo-004.bin",
       "type": "image/jpeg",
-      "iv": "XbesitTYGbAHRm1-"
+      "iv": "4dcff16f3dcb55c66c817bb32e0494a8"
     },
     {
       "file": "gallery/photo-005.bin",
       "type": "image/jpeg",
-      "iv": "lJ0Y8OfLw8zrxU9B"
+      "iv": "19c6d7264822e91bd99c0336a1eef661"
     },
     {
       "file": "gallery/photo-006.bin",
       "type": "image/jpeg",
-      "iv": "qQ96GEM9kG1ZVnWh"
+      "iv": "7d793e25093bdb186d54abbfb719f327"
     },
     {
       "file": "gallery/photo-007.bin",
       "type": "image/jpeg",
-      "iv": "Sx_NAuv6aatCFlJM"
+      "iv": "c22cb4424dceb9e37fdd61f35002295e"
     },
     {
       "file": "gallery/photo-008.bin",
       "type": "image/jpeg",
-      "iv": "LHrehHekV4ARQGZS"
+      "iv": "b2becf4422705b6bbc5d8a7087986072"
     },
     {
       "file": "gallery/photo-009.bin",
       "type": "image/jpeg",
-      "iv": "_EyvvCQvBtjjitPx"
+      "iv": "8e7ffffdc0ae441f81753892dd22b5a0"
     },
     {
       "file": "gallery/photo-010.bin",
       "type": "image/jpeg",
-      "iv": "od_lAfJdQlqeZe7X"
+      "iv": "2bfade4aeddef648ef6c07aaa2ee3df4"
     },
     {
       "file": "gallery/photo-011.bin",
       "type": "image/jpeg",
-      "iv": "_nxiQFcU53qYif3G"
+      "iv": "a226233bbe2cad5e39c48bb39141eab9"
     },
     {
       "file": "gallery/photo-012.bin",
       "type": "image/jpeg",
-      "iv": "Dqb88pPLK5zcDyvW"
+      "iv": "7ac2201bbf02d1267059c92dbc9b5c61"
     },
     {
       "file": "gallery/photo-013.bin",
       "type": "image/jpeg",
-      "iv": "8qDosi9d7OmtFQzk"
+      "iv": "89d2bfbad954e06556962a2ec9222fcf"
     },
     {
       "file": "gallery/photo-014.bin",
       "type": "image/jpeg",
-      "iv": "qH0rBJN-HgC3jOOu"
+      "iv": "f8b24767ebea185f19cee8444a904ba2"
     }
   ]
 }

@@ -11,6 +11,8 @@
     </script>
     <!-- 引入多种字体：Great Vibes(英手写), Ma Shan Zheng(中毛笔), Long Cang(中草书) -->
     <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Ma+Shan+Zheng&family=Long+Cang&family=Noto+Sans+SC:wght@700&family=Noto+Serif+SC:wght@400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <link rel="preconnect" href="https://fastly.jsdelivr.net" crossorigin>
+    <link rel="preload" href="https://fastly.jsdelivr.net/gh/xianj0/love-story-2d6d96f8@97a7380/gallery/photos.bundle?v=ad85b2d2ddbe" as="fetch" crossorigin="anonymous">
     <link rel="preload" href="tree-particles-v21.js?v=22" as="script">
     <script defer src="tree-particles-v21.js?v=22"></script>
     <style>
@@ -2757,7 +2759,7 @@
         async function loadPhotoBundle(manifest, expectedCount) {
             if(manifest.photoBundleCdn) {
                 const controller = new AbortController();
-                const timer = setTimeout(() => controller.abort(), 4500);
+                const timer = setTimeout(() => controller.abort(), 10000);
                 try {
                     const response = await fetch(manifest.photoBundleCdn, {
                         cache: 'default',
@@ -3323,7 +3325,10 @@
                 applySettings(deviceSettings, { rebuildScene: false });
             }
         });
-        setTimeout(primeBackgroundMusic, 250);
+        photoGalleryReady.then(
+            () => setTimeout(primeBackgroundMusic, 300),
+            () => setTimeout(primeBackgroundMusic, 300)
+        );
     </script>
     <script>
         window.loveSceneController = (() => {

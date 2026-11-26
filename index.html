@@ -2546,7 +2546,9 @@
         }
 
         async function loadEncryptedGallery() {
-            const keyText = new URLSearchParams(location.hash.slice(1)).get('gallery');
+            const searchKey = new URLSearchParams(location.search).get('gallery');
+            const hashKey = new URLSearchParams(location.hash.slice(1)).get('gallery');
+            const keyText = (searchKey || hashKey || '').trim();
             const encryptedStatus = document.getElementById('encrypted-photo-status');
             if(!keyText) {
                 if(encryptedStatus) encryptedStatus.textContent = '加密相册：未启用';

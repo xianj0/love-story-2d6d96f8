@@ -2891,21 +2891,22 @@
             // === 玫瑰浪漫 / 香槟鎏金主题切换 ===
             const switchTheme = (type) => {
                 state.style = type;
+                const preservedTitle = textInput.value.trim() || 'Happy Birthday';
                 if(type === 'rose') {
-                    titleEl.innerText = 'Happy Birthday';
+                    titleEl.innerText = preservedTitle;
                     titleEl.className = 'style-rose';
                     titleEl.style.fontFamily = "'Great Vibes', cursive";
-                    textInput.value = 'Happy Birthday';
+                    textInput.value = preservedTitle;
                     fontSelect.value = "'Great Vibes', cursive";
                     document.body.className = 'bg-warm';
                     document.getElementById('bg-select').value = 'warm';
                     document.getElementById('theme-xmas').classList.add('active');
                     document.getElementById('theme-cny').classList.remove('active');
                 } else {
-                    titleEl.innerText = '生日快乐';
+                    titleEl.innerText = preservedTitle;
                     titleEl.className = 'style-gold';
                     titleEl.style.fontFamily = "'Ma Shan Zheng', cursive";
-                    textInput.value = '生日快乐';
+                    textInput.value = preservedTitle;
                     fontSelect.value = "'Ma Shan Zheng', cursive";
                     document.body.className = 'bg-deep';
                     document.getElementById('bg-select').value = 'deep';

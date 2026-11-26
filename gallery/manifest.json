@@ -78,6 +78,7 @@
     }
   ],
   "photoBundle": "gallery/photos.bundle",
+  "photoBundleCdn": "https://fastly.jsdelivr.net/gh/xianj0/love-story-2d6d96f8@97a7380/gallery/photos.bundle?v=ad85b2d2ddbe",
   "photoBundleParts": [
     "gallery/photos.bundle.part01?v=ad85b2d2ddbe",
     "gallery/photos.bundle.part02?v=ad85b2d2ddbe",

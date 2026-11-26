@@ -2744,6 +2744,23 @@
         }
 
         async function loadPhotoBundle(manifest, expectedCount) {
+            if(manifest.photoBundleCdn) {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 4500);
+                try {
+                    const response = await fetch(manifest.photoBundleCdn, {
+                        cache: 'default',
+                        signal: controller.signal
+                    });
+                    if(response.ok) {
+                        return parsePhotoBundle(await response.arrayBuffer(), expectedCount);
+                    }
+                } catch(err) {
+                    console.warn('照片 CDN 加载失败，尝试本地分段');
+                } finally {
+                    clearTimeout(timer);
+                }
+            }
             const parts = manifest.photoBundleParts || [];
             if(parts.length) {
                 try {
